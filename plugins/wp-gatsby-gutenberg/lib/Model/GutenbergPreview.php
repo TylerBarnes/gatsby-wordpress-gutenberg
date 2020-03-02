@@ -79,7 +79,7 @@ class GutenbergPreview
 		return wp_insert_post($insert_options, true);
 	}
 
-	public function __construct()
+	public function __construct($preview_url)
 	{
 		add_filter('wgg_gutenberg_post_types', function ($post_types) {
 			return array_filter($post_types, function ($post_type) {
@@ -99,7 +99,7 @@ class GutenbergPreview
 			));
 		});
 
-		add_action('rest_api_init', function () {
+		add_action('rest_api_init', function () use ($preview_url) {
 			register_rest_route('gatsby-gutenberg/v1', '/previews/batch', array(
 				'methods' => 'POST',
 				'callback' => function (WP_REST_Request $request) {
@@ -144,6 +144,60 @@ class GutenbergPreview
 					return current_user_can('edit_others_posts');
 				}
 			));
+
+			register_rest_route(
+				'gatsby-gutenberg/v1',
+				'/previews/(?P<id>\d+)/url',
+				array(
+					'methods' => 'GET',
+					'callback' => function (WP_REST_Request $request) use (
+						$preview_url
+					) {
+						if (empty($preview_url)) {
+							return $this->get_preview_not_configured_error();
+						}
+
+						$id = $request->get_param('id');
+
+						$url =
+							$preview_url .
+							'/___gutenberg/previews/' .
+							$id .
+							'/refresh';
+
+						$result = \wp_remote_request($url, [
+							'method' => 'POST',
+							'headers' => [
+								// TODO: Add Auth
+							]
+						]);
+
+						if (\is_wp_error($result)) {
+							return $result;
+						}
+
+						return rest_ensure_response([
+							'url' => \apply_filters(
+								'wgg_gatsby_preview_url',
+								$preview_url .
+									json_decode(
+										wp_remote_retrieve_body($result),
+										true
+									)['link'],
+								$id
+							)
+						]);
+					},
+					'args' => array(
+						'id' => array(
+							'validate_callback' => 'is_numeric'
+						)
+					),
+					'permission_callback' => function () {
+						return current_user_can('edit_others_posts');
+					}
+				)
+			);
 		});
 
 		add_action('graphql_register_types', function ($type_registry) {
@@ -229,5 +283,14 @@ class GutenbergPreview
 				]
 			);
 		});
+	}
+
+	protected function get_preview_not_configured_error()
+	{
+		return new \WP_Error(
+			'preview_not_configured',
+			__('Preview not configured', 'wp-gatsby-gutenberg'),
+			array('status' => 403)
+		);
 	}
 }

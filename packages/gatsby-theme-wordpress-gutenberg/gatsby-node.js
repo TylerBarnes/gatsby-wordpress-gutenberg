@@ -598,7 +598,12 @@ const processContent = async (options, pluginOptions) => {
         blocks,
       })
 
-      const pageComponentPath = path.join(program.directory, PAGES_PATH, preview ? `___gutenberg` : ``, `${postId}.js`)
+      const pageComponentPath = path.join(
+        program.directory,
+        PAGES_PATH,
+        preview ? `___gutenberg/previews` : ``,
+        `${postId}.js`
+      )
 
       await writeFile({
         filePath: pageComponentPath,
@@ -615,7 +620,7 @@ const processContent = async (options, pluginOptions) => {
 
       await createPage({
         component: pageComponentPath,
-        path: preview ? `/___gutenberg/${postId}` : new URL(link).pathname,
+        path: preview ? `/___gutenberg/previews/${postId}` : new URL(link).pathname,
         context: {
           postId,
         },
@@ -699,4 +704,45 @@ exports.createPagesStatefully = (options, pluginOptions) => {
       )
       .on(`all`, cb)
   }
+}
+
+exports.onCreateDevServer = (options, pluginOptions) => {
+  const { app, store } = options
+
+  // const {
+  //   program: { host, port, keyFile },
+  // } = store.getState()
+
+  // const url = new URL(`${keyFile ? `https` : `http`}://${host}:${port}`)
+
+  // const proxyMiddleware = proxy({
+  //   changeOrigin: true,
+  //   xfwd: true,
+  //   target: pluginOptions.uri,
+  //   headers: {
+  //     "X-Gatsby-Wordpress-Gutenberg-Preview-Url": url.origin,
+  //   },
+  // })
+
+  // app.use(`/wp*`, proxyMiddleware)
+
+  app.post(`/___gutenberg/previews/:postId(\\d+)/refresh`, (req, res) => {
+    // TODO: add code to manually run sourcing again
+    // this should be independent from used source plugins
+    // callback should be provided by plugin config, suited for different sourcing plugins
+    // we can provide defaults for gastby-source-wordpress-experimental
+
+    res.send({
+      link: `/___gutenberg/previews/${req.params.postId}`,
+    })
+  })
+
+  app.post(`/___gutenberg/block-previews/:clientId`, (req, res) => {
+    res.send({})
+  })
+
+  app.delete(`/___gutenberg/block-previews/:clientId`, (req, res) => {
+    res.status(204)
+    res.send()
+  })
 }

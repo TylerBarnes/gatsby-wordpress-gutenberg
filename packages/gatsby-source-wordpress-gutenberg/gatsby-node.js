@@ -543,33 +543,3 @@ exports.createPages = async options => {
   // it will be opened upon new node creation again when needed
   await closeGutenberg(options)
 }
-
-exports.onCreateDevServer = (options, pluginOptions) => {
-  const { app, store } = options
-
-  // const {
-  //   program: { host, port, keyFile },
-  // } = store.getState()
-
-  // const url = new URL(`${keyFile ? `https` : `http`}://${host}:${port}`)
-
-  // const proxyMiddleware = proxy({
-  //   changeOrigin: true,
-  //   xfwd: true,
-  //   target: pluginOptions.uri,
-  //   headers: {
-  //     "X-Gatsby-Wordpress-Gutenberg-Preview-Url": url.origin,
-  //   },
-  // })
-
-  // app.use(`/wp*`, proxyMiddleware)
-
-  app.post(`/___gutenberg/refresh`, (req, res) => {
-    // TODO: add code to manually run sourcing again
-    // this should be independent from used source plugins
-    // callback should be provided by plugin config, suited for different sourcing plugins
-    // we can provide defaults for gastby-source-wordpress-experimental
-
-    res.send()
-  })
-}

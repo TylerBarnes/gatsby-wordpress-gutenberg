@@ -1,24 +1,42 @@
 /**
  * WordPress dependencies
  */
-import { useEffect, useContext, createContext } from '@wordpress/element';
+import { __ } from '@wordpress/i18n';
+import {
+	useEffect,
+	useContext,
+	useState,
+	createContext,
+	useCallback,
+} from '@wordpress/element';
 import { useRegistry, useDispatch, useSelect } from '@wordpress/data';
 import { addFilter } from '@wordpress/hooks';
+import { Toolbar, Button } from '@wordpress/components';
+import {
+	BlockControls,
+	// InspectorControls
+} from '@wordpress/block-editor';
 
-// import { registerPlugin } from "@wordpress/plugins"
-// import { PluginPostPublishPanel } from "@wordpress/edit-post"
+import { registerPlugin } from '@wordpress/plugins';
+import { PluginDocumentSettingPanel } from '@wordpress/edit-post';
 
-import store from './store';
-import { sendPreview } from './gatsby';
+import { debounce } from 'lodash';
+import styled from 'styled-components';
+
+import BlockPreview from './block-preview';
+import { postBatch, fetchPreviewUrl } from './gatsby';
+import PreviewIcon from './preview-icon';
+
+import './store';
 
 const CoreBlockContext = createContext(null);
 
-store.subscribe(() => {
-	sendPreview({
-		// client,
-		state: store.getState(),
-	});
-});
+const usePreview = () => {
+	return {
+		enabled:
+			window.wpGatsbyGutenberg && window.wpGatsbyGutenberg.previewEnabled,
+	};
+};
 
 addFilter(
 	`editor.BlockEdit`,
@@ -45,6 +63,7 @@ addFilter(
 			);
 
 			const { setBlocks } = useDispatch(`wp-gatsby-gutenberg/preview`);
+
 			const coreBlockId =
 				(coreBlock &&
 					coreBlock.attributes.ref &&
@@ -57,6 +76,10 @@ addFilter(
 				}
 			}, [blocks, coreBlockId, id]);
 
+			const [showPreview, setShowPreview] = useState(false);
+
+			const { enabled } = usePreview();
+
 			if (props.name === `core/block`) {
 				return (
 					<CoreBlockContext.Provider value={props}>
@@ -65,18 +88,108 @@ addFilter(
 				);
 			}
 
+			if (enabled) {
+				return (
+					<>
+						{showPreview ? (
+							<BlockPreview {...props} />
+						) : (
+							<Edit {...props} />
+						)}
+						<BlockControls>
+							<Toolbar>
+								<Button
+									className="components-toolbar__control"
+									label={__('Gatsby Preview')}
+									onClick={() => {
+										setShowPreview(!showPreview);
+									}}
+								>
+									<PreviewIcon active={showPreview} />
+								</Button>
+							</Toolbar>
+						</BlockControls>
+					</>
+				);
+			}
+
 			return <Edit {...props} />;
 		};
 	}
 );
 
-// const GatsbyWordpressGutenbergPreview
+const PreviewButton = styled(Button)`
+	&& {
+		&:not([disabled]) {
+			background-color: #663399;
+			border-color: #663399;
+			color: white;
 
-// const GatsbyWordpressGutenbergPreview = () => {
+			:hover {
+				background-color: #4d2673;
+				border-color: #402060;
+			}
+		}
+	}
+`;
 
-//   useEffect(() => {})
+const noIcon = () => null;
 
-//   return null
-// }
+const GatsbyWordpressGutenbergPreview = () => {
+	const [previewUrl, setPreviewUrl] = useState(null);
 
-// registerPlugin(`plugin-wp-gatsby-gutenberg-preview`, { render: GatsbyWordpressGutenbergPreview })
+	const { enabled } = usePreview();
+
+	const id = useSelect(
+		(select) => select(`core/editor`).getCurrentPostId(),
+		[]
+	);
+
+	const sendBatch = useCallback(
+		debounce(({ batch }) => {
+			postBatch({
+				batch,
+			}).then(() => {
+				if (enabled) {
+					fetchPreviewUrl({ id }).then(({ url }) => {
+						setPreviewUrl(url);
+					});
+				}
+			});
+		}, 500),
+		[enabled, id]
+	);
+
+	const batch = useSelect((select) =>
+		select(`wp-gatsby-gutenberg/preview`).getBatch()
+	);
+
+	useEffect(() => {
+		sendBatch({ batch });
+	}, [sendBatch, batch]);
+
+	if (enabled) {
+		return (
+			<PluginDocumentSettingPanel
+				name="custom-panel"
+				title={__('Gatsby Gutenberg Preview', 'wp-gatsby-gutenberg')}
+				icon={noIcon}
+			>
+				<PreviewButton
+					disabled={!previewUrl}
+					href={previewUrl}
+					target="_blank"
+					isLarge
+				>
+					{__('Preview', 'wp-gatsby-gutenberg')}
+				</PreviewButton>
+			</PluginDocumentSettingPanel>
+		);
+	}
+
+	return null;
+};
+
+registerPlugin(`plugin-wp-gatsby-gutenberg-preview`, {
+	render: GatsbyWordpressGutenbergPreview,
+});

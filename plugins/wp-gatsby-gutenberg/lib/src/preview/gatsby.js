@@ -1,38 +1,49 @@
-import { getSaveContent } from "@wordpress/blocks"
-import { debounce } from "lodash"
-import apiFetch from "@wordpress/api-fetch"
+import { getSaveContent } from '@wordpress/blocks';
+import { debounce } from 'lodash';
+import apiFetch from '@wordpress/api-fetch';
 
 const visitBlocks = (blocks, visitor) => {
-  blocks.forEach(block => {
-    visitor(block)
+	blocks.forEach((block) => {
+		visitor(block);
 
-    if (block.innerBlocks) {
-      visitBlocks(block.innerBlocks, visitor)
-    }
-  })
+		if (block.innerBlocks) {
+			visitBlocks(block.innerBlocks, visitor);
+		}
+	});
 
-  return blocks
-}
+	return blocks;
+};
 
-const visitor = block => {
-  block.saveContent = getSaveContent(block.name, block.attributes, block.innerBlocks)
-}
+const visitor = (block) => {
+	block.saveContent = getSaveContent(
+		block.name,
+		block.attributes,
+		block.innerBlocks
+	);
+};
 
-export const sendPreview = debounce(({ client, state }) => {
-  const data = JSON.parse(JSON.stringify(state))
+export const postBatch = ({ batch }) => {
+	const data = JSON.parse(JSON.stringify(batch));
 
-  Object.keys(data).forEach(id => {
-    const { blocks, blocksByCoreBlockId } = data[id]
+	Object.keys(data).forEach((id) => {
+		const { blocks, blocksByCoreBlockId } = data[id];
 
-    visitBlocks(blocks, visitor)
-    Object.keys(blocksByCoreBlockId).forEach(coreBlockId => {
-      visitBlocks(blocksByCoreBlockId[coreBlockId], visitor)
-    })
-  })
+		visitBlocks(blocks, visitor);
+		Object.keys(blocksByCoreBlockId).forEach((coreBlockId) => {
+			visitBlocks(blocksByCoreBlockId[coreBlockId], visitor);
+		});
+	});
 
-  apiFetch({
-    path: `/gatsby-gutenberg/v1/previews/batch`,
-    method: `POST`,
-    data: { batch: data },
-  })
-}, 500)
+	return apiFetch({
+		path: `/gatsby-gutenberg/v1/previews/batch`,
+		method: `POST`,
+		data: { batch: data },
+	});
+};
+
+export const fetchPreviewUrl = ({ id }) => {
+	return apiFetch({
+		path: `/gatsby-gutenberg/v1/previews/${id}/url`,
+		method: `GET`,
+	});
+};
